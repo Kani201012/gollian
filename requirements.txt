@@ -1,0 +1,20 @@
+# CommodityPulse Alerts — requirements.txt
+# ─────────────────────────────────────────
+# Install: pip install -r requirements.txt
+
+# Core data & indicators
+yfinance>=1.3.0
+ta>=0.11.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP (Telegram sender)
+requests>=2.31.0
+
+# Streamlit dashboard
+streamlit>=1.35.0
+plotly>=5.18.0
+
+# Utilities
+pytz>=2024.1
+python-dotenv>=1.0.0
