@@ -1,0 +1,79 @@
+name: CommodityPulse Engine
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRIGGERS
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  # Run automatically every 5 minutes Mon–Fri during commodity market hours
+  # Crude & Gas trade ~23h/day; Gold/Silver 23h/day — these cron windows
+  # cover all four assets during active sessions.
+  schedule:
+    - cron: "*/5 0-21 * * 1-5"   # Mon–Fri, 00:00–21:55 UTC (covers US/EU sessions)
+
+  # Manual trigger with optional overrides
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run — log signals but do NOT send Telegram alerts"
+        required: true
+        default: "false"
+        type: choice
+        options: ["true", "false"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  run-signal-engine:
+    name: "Signal Engine Cycle"
+    runs-on: ubuntu-latest
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      # 1 — Checkout
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2 — Python setup
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 3 — Cache pip packages (speeds up repeat runs)
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 4 — Install dependencies
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 5 — Run one signal evaluation cycle
+      #     The engine is imported and run_once() is called — a single
+      #     evaluate-all-assets pass without the infinite sleep loop.
+      #     GitHub Actions is ephemeral; the loop lives on the Oracle/AWS VM.
+      - name: Run signal evaluation cycle
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRY_RUN:            ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          python3 run_once.py
+
+      # 6 — Upload log artifact for debugging
+      - name: Upload signal log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signal-log-${{ github.run_number }}
+          path: "*.log"
+          retention-days: 7
